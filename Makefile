@@ -42,7 +42,7 @@ help:
 
 up:
 	@echo "Starting all services..."
-	cd docker && docker compose up -d
+	cd docker && docker compose --env-file ../.env up -d
 	@echo "Services started. Access points:"
 	@echo "  Airflow: http://localhost:8080 (admin/admin)"
 	@echo "  Grafana: http://localhost:3000 (admin/admin)"
@@ -50,19 +50,19 @@ up:
 
 down:
 	@echo "Stopping all services..."
-	cd docker && docker compose down
+	cd docker && docker compose --env-file ../.env down
 
 restart: down up
 
 logs:
-	cd docker && docker compose logs -f
+	cd docker && docker compose --env-file ../.env logs -f
 
 ps:
-	cd docker && docker compose ps
+	cd docker && docker compose --env-file ../.env ps
 
 clean:
 	@echo "Cleaning up Docker resources..."
-	cd docker && docker compose down -v --rmi local
+	cd docker && docker compose --env-file ../.env down -v --rmi local
 	@echo "Cleanup complete."
 
 # =============================================================================
@@ -160,11 +160,11 @@ psql:
 
 # Trigger Airflow DAG
 trigger-etl:
-	docker compose -f docker/docker-compose.yml exec airflow-webserver \
+	docker compose -f docker/docker-compose.yml --env-file .env exec airflow-webserver \
 		airflow dags trigger spotify_etl_pipeline
 
 trigger-dq:
-	docker compose -f docker/docker-compose.yml exec airflow-webserver \
+	docker compose -f docker/docker-compose.yml --env-file .env exec airflow-webserver \
 		airflow dags trigger data_quality_monitoring
 
 # Launch Jupyter notebook
