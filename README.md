@@ -454,7 +454,8 @@ make reset-db
 # or: ./scripts/reset_database.sh
 
 # Restart services to pick up any .env changes
-cd docker && docker compose down && docker compose up -d
+make down && make up
+# or: cd docker && docker compose down && docker compose up -d
 ```
 
 ### 6. Data Exploration (Jupyter Notebook)

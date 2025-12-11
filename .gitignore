@@ -86,6 +86,7 @@ Thumbs.db
 # Credentials & Secrets (NEVER COMMIT)
 # =============================================================================
 .env
+docker/.env
 .env.local
 .env.*.local
 *.pem
