@@ -112,6 +112,8 @@ jobs:
                 schema: public
                 threads: 4
           EOF
+          sed -i 's/^          //' ~/.dbt/profiles.yml
+          cat ~/.dbt/profiles.yml
 
       - name: Initialize PostgreSQL schemas
         run: |
@@ -195,6 +197,8 @@ jobs:
                 schema: public
                 threads: 4
           EOF
+          sed -i 's/^          //' ~/.dbt/profiles.yml
+          cat ~/.dbt/profiles.yml
 
       - name: Initialize PostgreSQL schemas
         run: |
