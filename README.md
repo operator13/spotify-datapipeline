@@ -405,8 +405,8 @@ WHERE energy < 0 OR energy > 1
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/yourusername/spotify_datapipeline.git
-cd spotify_datapipeline
+git clone https://github.com/operator13/spotify-datapipeline.git
+cd spotify-datapipeline
 
 # Configure environment variables
 cp .env.example .env
