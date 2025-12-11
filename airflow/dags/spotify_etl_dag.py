@@ -100,17 +100,16 @@ def load_to_postgres(**context: Any) -> int:
         conn.execute(text("DROP TABLE IF EXISTS raw.spotify_tracks_raw CASCADE"))
     print("Dropped existing table with CASCADE")
 
-    # Load to raw schema (use 'fail' since we just dropped it)
+    # Load to raw schema in chunks (use 'fail' since we just dropped it)
+    # Using smaller chunks and no 'multi' method to avoid memory issues
     df.to_sql(
         'spotify_tracks_raw',
         engine,
         schema='raw',
         if_exists='fail',
         index=False,
-        method='multi',
-        chunksize=10000
+        chunksize=1000
     )
-
     print(f"Successfully loaded {len(df)} records to raw.spotify_tracks_raw")
     context['ti'].xcom_push(key='row_count', value=len(df))
     return len(df)
