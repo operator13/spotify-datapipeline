@@ -1,0 +1,202 @@
+# =============================================================================
+# Intermediate Models Configuration
+# Tests and documentation for intermediate layer models
+# =============================================================================
+
+version: 2
+
+models:
+  # =========================================================================
+  # Track Deduplication Model
+  # =========================================================================
+  - name: int_tracks__deduplicated
+    description: >
+      Tracks with duplicates removed based on name, artist, and album.
+      Keeps the record with highest popularity when duplicates exist.
+
+    tests:
+      # UNIQUENESS: Verify deduplication worked
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - track_id
+          severity: error
+
+      # CONSISTENCY: Row count should be <= staging
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1
+          max_value: "{{ var('max_row_count') }}"
+          severity: error
+
+    columns:
+      - name: track_id
+        description: "Primary key - surrogate key for track"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: duplicate_rank
+        description: "Rank within duplicate group (1 = kept record)"
+        tests:
+          - accepted_values:
+              values: [1]
+              severity: error
+
+      - name: had_duplicates
+        description: "Flag indicating if track had duplicate records in source"
+        tests:
+          - not_null:
+              severity: warn
+
+  # =========================================================================
+  # Artist Parsing Model
+  # =========================================================================
+  - name: int_artists__parsed
+    description: >
+      Parsed and aggregated artist information from tracks.
+      Each unique artist gets one record with calculated metrics.
+
+    tests:
+      # UNIQUENESS: One record per artist
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - artist_id
+          severity: error
+
+    columns:
+      - name: artist_id
+        description: "Surrogate key for artist"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: artist_name
+        description: "Artist display name"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: track_count
+        description: "Number of tracks by this artist"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              severity: error
+
+      - name: avg_popularity
+        description: "Average popularity across artist's tracks"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              severity: warn
+
+      - name: artist_tier
+        description: "Artist classification tier"
+        tests:
+          - accepted_values:
+              values: ['Top Tier', 'Established', 'Rising', 'Emerging']
+              severity: error
+
+      - name: streaming_tier
+        description: "Streaming volume tier"
+        tests:
+          - accepted_values:
+              values: ['Billion+', '100M+', '10M+', '1M+', 'Under 1M']
+              severity: error
+
+  # =========================================================================
+  # Track Enrichment Model
+  # =========================================================================
+  - name: int_tracks__enriched
+    description: >
+      Tracks with derived features and categorizations.
+      Ready for consumption by marts layer.
+
+    tests:
+      # UNIQUENESS: One record per track
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - track_id
+          severity: error
+
+      # CONSISTENCY: Should match deduplicated count
+      - dbt_expectations.expect_table_row_count_to_equal_other_table:
+          compare_model: ref('int_tracks__deduplicated')
+          severity: error
+
+    columns:
+      - name: track_id
+        description: "Primary key"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: streaming_tier
+        description: "Streaming volume tier classification"
+        tests:
+          - accepted_values:
+              values: ['Billion Club', '500M+', '100M+', '50M+', '10M+', '1M+', '100K+', 'Under 100K']
+              severity: error
+
+      - name: release_decade
+        description: "Decade classification"
+        tests:
+          - accepted_values:
+              values: ['2020s', '2015-2019', 'Pre-2015']
+              severity: error
+
+      - name: audio_profile
+        description: "Audio characteristic profile"
+        tests:
+          - accepted_values:
+              values: ['Instrumental', 'High Energy Dance', 'Upbeat', 'Melancholic', 'Dance', 'Chill', 'Balanced']
+              severity: error
+
+      - name: loudness_category
+        description: "Loudness level category"
+        tests:
+          - accepted_values:
+              values: ['Very Loud', 'Loud', 'Moderate', 'Quiet', 'Very Quiet']
+              severity: error
+
+      - name: danceability_category
+        description: "Danceability level category"
+        tests:
+          - accepted_values:
+              values: ['Very Danceable', 'Danceable', 'Moderate', 'Low Danceability']
+              severity: error
+
+      - name: valence_category
+        description: "Valence/mood category"
+        tests:
+          - accepted_values:
+              values: ['Very Positive', 'Positive', 'Neutral', 'Melancholic', 'Very Dark']
+              severity: error
+
+      - name: popularity_percentile_in_genre
+        description: "Percentile rank within genre (0-100)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              severity: error
+
+      - name: streaming_percentile
+        description: "Overall streaming percentile (0-100)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              severity: error
+
+      - name: is_genre_hit
+        description: "Whether track is in top 10% popularity for its genre"
+        tests:
+          - not_null:
+              severity: warn

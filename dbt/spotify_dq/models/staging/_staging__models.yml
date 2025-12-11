@@ -1,0 +1,240 @@
+# =============================================================================
+# Staging Models Configuration
+# Tests and documentation for staging layer models
+# =============================================================================
+
+version: 2
+
+models:
+  - name: stg_spotify__tracks
+    description: >
+      Cleaned and standardized Spotify tracks from raw source.
+      Includes type casting, surrogate key generation, and derived categorizations.
+
+    config:
+      tags: ['staging', 'critical']
+
+    # =======================================================================
+    # Table-Level Tests
+    # =======================================================================
+    tests:
+      # COMPLETENESS: Row count validation
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: "{{ var('min_row_count') }}"
+          max_value: "{{ var('max_row_count') }}"
+          severity: error
+
+      # TIMELINESS: Freshness check
+      - dbt_expectations.expect_row_values_to_have_recent_data:
+          column_name: _dbt_loaded_at
+          datepart: hour
+          interval: "{{ var('max_freshness_hours') }}"
+          severity: warn
+
+      # UNIQUENESS: Primary key validation
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - track_id
+          severity: error
+
+    # =======================================================================
+    # Column-Level Tests
+    # =======================================================================
+    columns:
+      # -----------------------------------------------------------------
+      # Primary Key
+      # -----------------------------------------------------------------
+      - name: track_id
+        description: "Surrogate key generated from track_name + artists + album"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      # -----------------------------------------------------------------
+      # Track Information
+      # -----------------------------------------------------------------
+      - name: track_name
+        description: "Track title (trimmed)"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: artist_names_raw
+        description: "Artist name(s) - may contain multiple artists separated by delimiter"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: album_name
+        description: "Album name (trimmed)"
+        tests:
+          - not_null:
+              severity: warn
+
+      - name: genre
+        description: "Music genre classification"
+        tests:
+          - not_null:
+              severity: warn
+          # VALIDITY: Check genre cardinality
+          - dbt_expectations.expect_column_distinct_count_to_be_less_than:
+              value: 100
+              severity: warn
+
+      - name: country
+        description: "Country of origin"
+        tests:
+          - not_null:
+              severity: warn
+
+      - name: record_label
+        description: "Record label name"
+
+      # -----------------------------------------------------------------
+      # Release Date Components
+      # -----------------------------------------------------------------
+      - name: release_date_raw
+        description: "Original release date string from source"
+
+      - name: release_year
+        description: "Extracted release year (2015-2025)"
+        tests:
+          # TIMELINESS: Year must be in expected range
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('release_year_min') }}"
+              max_value: "{{ var('release_year_max') }}"
+              severity: warn
+
+      - name: release_month
+        description: "Extracted release month (1-12)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 12
+              severity: warn
+
+      # -----------------------------------------------------------------
+      # Audio Features (Normalized 0-1)
+      # -----------------------------------------------------------------
+      - name: energy
+        description: "Energy level score (0.0-1.0)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('normalized_feature_min') }}"
+              max_value: "{{ var('normalized_feature_max') }}"
+              severity: error
+
+      - name: danceability
+        description: "Danceability score (0.0-1.0)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('normalized_feature_min') }}"
+              max_value: "{{ var('normalized_feature_max') }}"
+              severity: error
+
+      - name: instrumentalness
+        description: "Instrumentalness score (0.0-1.0)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('normalized_feature_min') }}"
+              max_value: "{{ var('normalized_feature_max') }}"
+              severity: error
+
+      - name: valence
+        description: "Musical positivity score (0.0-1.0)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('normalized_feature_min') }}"
+              max_value: "{{ var('normalized_feature_max') }}"
+              severity: error
+
+      - name: mood_score
+        description: "Derived mood score (valence + energy) / 2"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 1.0
+              severity: error
+
+      # -----------------------------------------------------------------
+      # Audio Attributes
+      # -----------------------------------------------------------------
+      - name: tempo_bpm
+        description: "Tempo in beats per minute"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('tempo_min') }}"
+              max_value: "{{ var('tempo_max') }}"
+              severity: warn
+
+      - name: loudness_db
+        description: "Loudness in decibels"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('loudness_min') }}"
+              max_value: "{{ var('loudness_max') }}"
+              severity: warn
+
+      # -----------------------------------------------------------------
+      # Metrics
+      # -----------------------------------------------------------------
+      - name: popularity_score
+        description: "Popularity metric (0-100)"
+        tests:
+          - not_null:
+              severity: warn
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "{{ var('popularity_min') }}"
+              max_value: "{{ var('popularity_max') }}"
+              severity: error
+
+      - name: streaming_counts
+        description: "Number of streams"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              severity: error
+
+      # -----------------------------------------------------------------
+      # Derived Categories
+      # -----------------------------------------------------------------
+      - name: popularity_tier
+        description: "Categorized popularity level"
+        tests:
+          - accepted_values:
+              values: ['Very Popular', 'Popular', 'Moderate', 'Low', 'Very Low']
+              severity: error
+
+      - name: tempo_category
+        description: "Categorized tempo level"
+        tests:
+          - accepted_values:
+              values: ['Slow', 'Moderate', 'Fast', 'Very Fast']
+              severity: error
+
+      - name: energy_category
+        description: "Categorized energy level"
+        tests:
+          - accepted_values:
+              values: ['Low Energy', 'Medium Energy', 'High Energy']
+              severity: error
+
+      # -----------------------------------------------------------------
+      # Metadata
+      # -----------------------------------------------------------------
+      - name: _loaded_at
+        description: "Source system load timestamp"
+
+      - name: _dbt_loaded_at
+        description: "dbt processing timestamp"
+        tests:
+          - not_null:
+              severity: warn
+
+      - name: _dbt_run_id
+        description: "dbt invocation ID for lineage"
+        tests:
+          - not_null:
+              severity: warn

@@ -1,0 +1,10 @@
+# Airflow container Python dependencies
+dbt-core==1.7.0
+dbt-postgres==1.7.0
+kagglehub>=0.2.0
+pandas>=2.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+apache-airflow-providers-postgres>=5.0.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.0

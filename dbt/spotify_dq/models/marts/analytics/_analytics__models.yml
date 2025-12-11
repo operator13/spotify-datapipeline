@@ -1,0 +1,64 @@
+# =============================================================================
+# Analytics Models Configuration
+# Data quality and analytical models
+# =============================================================================
+
+version: 2
+
+models:
+  - name: dq_metrics_summary
+    description: >
+      Aggregated data quality metrics across all 6 dimensions.
+      Powers Grafana dashboards and provides historical DQ tracking.
+
+    tests:
+      # Every dimension should have metrics
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 10
+          severity: warn
+
+    columns:
+      - name: dimension
+        description: "Data quality dimension (Completeness, Accuracy, etc.)"
+        tests:
+          - not_null:
+              severity: error
+          - accepted_values:
+              values: ['Completeness', 'Accuracy', 'Consistency', 'Timeliness', 'Validity', 'Uniqueness']
+              severity: error
+
+      - name: table_name
+        description: "Source table for the metric"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: metric_name
+        description: "Specific metric identifier"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: metric_value
+        description: "Calculated metric value"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: threshold_value
+        description: "Acceptable threshold for the metric"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: passed
+        description: "Whether metric meets threshold"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: dbt_run_id
+        description: "dbt invocation ID for lineage"
+        tests:
+          - not_null:
+              severity: warn

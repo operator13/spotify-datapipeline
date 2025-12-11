@@ -1,0 +1,218 @@
+# =============================================================================
+# Staging Layer Source Definition
+# Defines raw Spotify data source with comprehensive DQ tests
+# =============================================================================
+
+version: 2
+
+sources:
+  - name: spotify_raw
+    description: "Raw Spotify tracks data loaded from Kaggle dataset (2015-2025)"
+    database: spotify_warehouse
+    schema: raw
+
+    # Source freshness configuration
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    loaded_at_field: _loaded_at
+
+    tables:
+      - name: tracks
+        description: "Raw Spotify tracks with audio features and streaming data (85K+ records)"
+        identifier: spotify_tracks_raw
+
+        columns:
+          # =================================================================
+          # Track Identification
+          # =================================================================
+          - name: track_id
+            description: "Unique track identifier from source"
+
+          - name: track_name
+            description: "Name of the track"
+            tests:
+              # COMPLETENESS: Required field
+              - not_null:
+                  severity: error
+              # VALIDITY: Name should have reasonable length
+              - dbt_expectations.expect_column_value_lengths_to_be_between:
+                  min_value: 1
+                  max_value: 500
+                  severity: warn
+
+          - name: artist_name
+            description: "Artist name(s) - may contain multiple artists"
+            tests:
+              # COMPLETENESS: Required field
+              - not_null:
+                  severity: error
+              # VALIDITY: Artist name should have content
+              - dbt_expectations.expect_column_value_lengths_to_be_between:
+                  min_value: 1
+                  max_value: 1000
+                  severity: warn
+
+          - name: album_name
+            description: "Album name containing the track"
+            tests:
+              # COMPLETENESS: May be null for singles
+              - dbt_expectations.expect_column_values_to_not_be_null:
+                  row_condition: "1=1"
+                  severity: warn
+
+          # =================================================================
+          # Classification
+          # =================================================================
+          - name: genre
+            description: "Music genre classification"
+            tests:
+              # COMPLETENESS: Required for analysis
+              - not_null:
+                  severity: warn
+              # VALIDITY: Genre cardinality check
+              - dbt_expectations.expect_column_distinct_count_to_be_less_than:
+                  value: 100
+                  severity: warn
+
+          - name: release_date
+            description: "Track release date (format: YYYY-MM-DD or YYYY)"
+            tests:
+              # COMPLETENESS: Required for timeliness analysis
+              - not_null:
+                  severity: warn
+
+          - name: country
+            description: "Country of origin"
+            tests:
+              # COMPLETENESS: Should be populated
+              - not_null:
+                  severity: warn
+              # VALIDITY: Reasonable country count
+              - dbt_expectations.expect_column_distinct_count_to_be_less_than:
+                  value: 200
+                  severity: warn
+
+          - name: label
+            description: "Record label"
+            tests:
+              # COMPLETENESS: May have nulls for indie releases
+              - dbt_expectations.expect_column_values_to_not_be_null:
+                  row_condition: "1=1"
+                  severity: warn
+
+          - name: explicit
+            description: "Whether track has explicit content (0 or 1)"
+
+          # =================================================================
+          # Audio Features (Normalized 0-1)
+          # =================================================================
+          - name: energy
+            description: "Energy level score (0.0-1.0)"
+            tests:
+              # ACCURACY: Must be in normalized range
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0.0
+                  max_value: 1.0
+                  severity: error
+              # VALIDITY: Statistical sanity check
+              - dbt_expectations.expect_column_median_to_be_between:
+                  min_value: 0.2
+                  max_value: 0.9
+                  severity: warn
+
+          - name: danceability
+            description: "Danceability score (0.0-1.0)"
+            tests:
+              # ACCURACY: Must be in normalized range
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0.0
+                  max_value: 1.0
+                  severity: error
+
+          - name: instrumentalness
+            description: "Proportion without vocals (0.0-1.0)"
+            tests:
+              # ACCURACY: Must be in normalized range
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0.0
+                  max_value: 1.0
+                  severity: error
+
+          # =================================================================
+          # Audio Attributes
+          # =================================================================
+          - name: tempo
+            description: "Tempo in beats per minute (BPM)"
+            tests:
+              # ACCURACY: Reasonable BPM range for music
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 40
+                  max_value: 250
+                  severity: warn
+              # VALIDITY: Mean should be reasonable
+              - dbt_expectations.expect_column_mean_to_be_between:
+                  min_value: 80
+                  max_value: 160
+                  severity: warn
+
+          - name: loudness
+            description: "Overall loudness in decibels (dB)"
+            tests:
+              # ACCURACY: Typical loudness range
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: -60
+                  max_value: 5
+                  severity: warn
+
+          - name: duration_ms
+            description: "Track duration in milliseconds"
+
+          - name: key
+            description: "Musical key (0-11)"
+
+          - name: mode
+            description: "Musical mode (0=minor, 1=major)"
+
+          # =================================================================
+          # Metrics
+          # =================================================================
+          - name: popularity
+            description: "Popularity metric (0-100)"
+            tests:
+              # ACCURACY: Must be in valid range
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 100
+                  severity: error
+              # VALIDITY: Statistical distribution check
+              - dbt_expectations.expect_column_mean_to_be_between:
+                  min_value: 10
+                  max_value: 80
+                  severity: warn
+
+          - name: stream_count
+            description: "Number of streams"
+            tests:
+              # VALIDITY: Streams must be non-negative
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  severity: error
+              # ACCURACY: Check for reasonable range (no extreme outliers)
+              - dbt_expectations.expect_column_quantile_values_to_be_between:
+                  quantile: 0.99
+                  min_value: 0
+                  max_value: 10000000000
+                  severity: warn
+
+          # =================================================================
+          # Metadata (added during load)
+          # =================================================================
+          - name: _loaded_at
+            description: "Timestamp when record was loaded to raw schema"
+            tests:
+              - not_null:
+                  severity: warn
+
+          - name: _source_file
+            description: "Source file path"

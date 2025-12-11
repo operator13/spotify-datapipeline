@@ -1,0 +1,25 @@
+# =============================================================================
+# dbt Package Dependencies
+# Spotify Data Quality Pipeline
+# =============================================================================
+
+packages:
+  # dbt-utils: Essential utility macros for dbt
+  # Includes: surrogate_key, pivot, unpivot, union, etc.
+  - package: dbt-labs/dbt_utils
+    version: [">=1.1.0", "<2.0.0"]
+
+  # dbt-expectations: Data quality testing inspired by Great Expectations
+  # Includes: expect_column_values_to_be_between, expect_table_row_count, etc.
+  - package: calogica/dbt_expectations
+    version: [">=0.10.0", "<0.11.0"]
+
+  # codegen: Code generation utilities for dbt
+  # Includes: generate_source, generate_model_yaml, generate_base_model
+  - package: dbt-labs/codegen
+    version: [">=0.12.0", "<0.13.0"]
+
+  # audit-helper: Audit and comparison utilities
+  # Includes: compare_relations, compare_queries, compare_column_values
+  - package: dbt-labs/audit_helper
+    version: [">=0.9.0", "<0.10.0"]

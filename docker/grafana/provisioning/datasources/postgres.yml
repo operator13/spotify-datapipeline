@@ -1,0 +1,26 @@
+# =============================================================================
+# Grafana PostgreSQL Datasource Configuration
+# Connects to Spotify Warehouse for Data Quality metrics
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: Spotify Warehouse
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: spotify_warehouse
+    user: spotify
+    uid: spotify_warehouse
+    secureJsonData:
+      password: spotify_password
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    isDefault: true
+    editable: true

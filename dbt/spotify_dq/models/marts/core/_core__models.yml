@@ -1,0 +1,339 @@
+# =============================================================================
+# Marts Core Models Configuration
+# Tests and documentation for dimension and fact tables
+# =============================================================================
+
+version: 2
+
+models:
+  # =========================================================================
+  # FACT TABLES
+  # =========================================================================
+
+  - name: fct_tracks
+    description: >
+      Central fact table containing all track details with audio features,
+      streaming metrics, and foreign keys to all dimension tables.
+      Grain: One row per unique track.
+
+    tests:
+      # COMPLETENESS: Minimum row count
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: "{{ var('min_row_count') }}"
+          severity: error
+
+      # CONSISTENCY: Should match intermediate layer
+      - dbt_expectations.expect_table_row_count_to_equal_other_table:
+          compare_model: ref('int_tracks__enriched')
+          severity: warn
+
+    columns:
+      - name: track_sk
+        description: "Surrogate key for the track"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: track_id
+        description: "Natural key - generated from track attributes"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: genre_sk
+        description: "Foreign key to dim_genres"
+        tests:
+          - relationships:
+              to: ref('dim_genres')
+              field: genre_sk
+              severity: warn
+
+      - name: country_sk
+        description: "Foreign key to dim_countries"
+        tests:
+          - relationships:
+              to: ref('dim_countries')
+              field: country_sk
+              severity: warn
+
+      - name: label_sk
+        description: "Foreign key to dim_labels"
+        tests:
+          - relationships:
+              to: ref('dim_labels')
+              field: label_sk
+              severity: warn
+
+      - name: popularity_score
+        description: "Track popularity (0-100)"
+        tests:
+          - not_null:
+              severity: warn
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              severity: error
+
+      - name: streaming_counts
+        description: "Total streaming count"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              severity: error
+
+      - name: danceability
+        description: "Danceability score (0-1)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 1.0
+              severity: error
+
+      - name: energy
+        description: "Energy score (0-1)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 1.0
+              severity: error
+
+      - name: mood_score
+        description: "Derived mood score (0-1)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 1.0
+              severity: error
+
+      - name: popularity_tier
+        description: "Categorized popularity level"
+        tests:
+          - accepted_values:
+              values: ['Very Popular', 'Popular', 'Moderate', 'Low', 'Very Low']
+              severity: error
+
+  - name: fct_streaming_metrics
+    description: >
+      Pre-aggregated streaming metrics by genre, country, and year.
+      Optimized for dashboard queries and trend analysis.
+      Grain: One row per genre + country + year combination.
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - genre
+            - country
+            - release_year
+          severity: error
+
+    columns:
+      - name: metric_sk
+        description: "Surrogate key for aggregate record"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: track_count
+        description: "Number of tracks in this combination"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              severity: error
+
+      - name: hit_rate
+        description: "Percentage of tracks that are genre hits"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 1.0
+              severity: error
+
+  # =========================================================================
+  # DIMENSION TABLES
+  # =========================================================================
+
+  - name: dim_genres
+    description: >
+      Genre dimension with aggregated audio characteristics and statistics.
+      Grain: One row per unique genre.
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - genre_name
+          severity: error
+
+    columns:
+      - name: genre_sk
+        description: "Surrogate key for genre"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: genre_name
+        description: "Genre name"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: track_count
+        description: "Number of tracks in genre"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              severity: error
+
+      - name: avg_popularity
+        description: "Average popularity for genre"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              severity: warn
+
+      - name: genre_profile
+        description: "Audio-based genre classification"
+        tests:
+          - accepted_values:
+              values: ['High Energy Dance', 'Instrumental', 'Melancholic', 'Dance-Focused', 'Chill/Ambient', 'Balanced']
+              severity: warn
+
+  - name: dim_artists
+    description: >
+      Artist dimension with career metrics and tier classification.
+      Grain: One row per unique artist.
+
+    columns:
+      - name: artist_sk
+        description: "Surrogate key for artist"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: artist_name
+        description: "Artist display name"
+        tests:
+          - not_null:
+              severity: error
+
+      - name: artist_tier
+        description: "Artist classification tier"
+        tests:
+          - accepted_values:
+              values: ['Top Tier', 'Established', 'Rising', 'Emerging']
+              severity: error
+
+      - name: streaming_tier
+        description: "Streaming volume tier"
+        tests:
+          - accepted_values:
+              values: ['Billion+', '100M+', '10M+', '1M+', 'Under 1M']
+              severity: error
+
+  - name: dim_countries
+    description: >
+      Country dimension with geographic music characteristics.
+      Grain: One row per unique country.
+
+    columns:
+      - name: country_sk
+        description: "Surrogate key for country"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: country_code
+        description: "Country code"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: market_tier
+        description: "Market size classification"
+        tests:
+          - accepted_values:
+              values: ['Major Market', 'Established Market', 'Growing Market', 'Emerging Market']
+              severity: warn
+
+  - name: dim_labels
+    description: >
+      Record label dimension with portfolio metrics.
+      Grain: One row per unique label.
+
+    columns:
+      - name: label_sk
+        description: "Surrogate key for label"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: label_name
+        description: "Record label name"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: label_tier
+        description: "Label size classification"
+        tests:
+          - accepted_values:
+              values: ['Major Label', 'Mid-Size Label', 'Indie Label', 'Micro Label']
+              severity: warn
+
+  - name: dim_date
+    description: >
+      Date dimension covering 2015-2025.
+      Grain: One row per year-month combination.
+
+    columns:
+      - name: date_sk
+        description: "Surrogate key for date"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: year
+        description: "Calendar year"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 2015
+              max_value: 2025
+              severity: error
+
+      - name: month
+        description: "Calendar month (1-12)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 12
+              severity: error
+
+      - name: quarter
+        description: "Calendar quarter (1-4)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 4
+              severity: error

@@ -1,0 +1,145 @@
+# =============================================================================
+# dbt Project Configuration
+# Spotify Data Quality Pipeline
+# =============================================================================
+
+name: 'spotify_dq'
+version: '1.0.0'
+config-version: 2
+
+# Project profile (defined in profiles.yml)
+profile: 'spotify_dq'
+
+# File paths
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Build artifacts
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# =============================================================================
+# Project Variables
+# Centralized configuration for DQ thresholds and business rules
+# =============================================================================
+vars:
+  # dbt_date package requirement
+  dbt_date:time_zone: 'UTC'
+
+  # Data Quality Thresholds
+  completeness_threshold: 0.95
+  accuracy_threshold: 0.99
+  uniqueness_threshold: 1.0
+  freshness_hours: 24
+  max_freshness_hours: 48
+
+  # Row Count Expectations
+  min_row_count: 100
+  max_row_count: 200000
+  max_duplicate_ratio: 0.01
+
+  # Audio Feature Bounds (normalized 0-1)
+  normalized_feature_min: 0.0
+  normalized_feature_max: 1.0
+
+  # Popularity Bounds
+  popularity_min: 0
+  popularity_max: 100
+
+  # Tempo Bounds (BPM)
+  tempo_min: 40
+  tempo_max: 250
+
+  # Loudness Bounds (dB)
+  loudness_min: -60
+  loudness_max: 5
+
+  # Date Range
+  release_year_min: 2015
+  release_year_max: 2025
+
+# =============================================================================
+# Model Configurations
+# =============================================================================
+models:
+  spotify_dq:
+    # Default configuration
+    +materialized: view
+    +schema: "{{ target.schema }}"
+
+    # Staging layer: 1:1 source mapping, cleaning, type casting
+    staging:
+      +materialized: view
+      +schema: staging
+      +tags: ['staging', 'daily']
+
+    # Intermediate layer: Business logic, deduplication, enrichment
+    intermediate:
+      +materialized: ephemeral
+      +schema: intermediate
+      +tags: ['intermediate']
+
+    # Marts layer: Final dimensional model
+    marts:
+      +materialized: table
+      +schema: marts
+      +tags: ['marts', 'daily']
+
+      core:
+        +materialized: table
+        +tags: ['core', 'critical']
+
+      analytics:
+        +materialized: table
+        +tags: ['analytics', 'data_quality']
+
+# =============================================================================
+# Seed Configurations
+# =============================================================================
+seeds:
+  spotify_dq:
+    +schema: seeds
+    +quote_columns: true
+
+    valid_genres:
+      +column_types:
+        genre_name: varchar(100)
+        genre_category: varchar(50)
+
+    valid_countries:
+      +column_types:
+        country_code: varchar(10)
+        country_name: varchar(100)
+
+# =============================================================================
+# Test Configurations
+# =============================================================================
+tests:
+  +severity: warn
+  +store_failures: true
+  +schema: data_quality
+
+# =============================================================================
+# Snapshot Configurations
+# =============================================================================
+snapshots:
+  spotify_dq:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +unique_key: track_id
+
+# =============================================================================
+# Run Hooks
+# =============================================================================
+on-run-start:
+  - "{{ log('Starting dbt run at ' ~ modules.datetime.datetime.now(), info=True) }}"
+  - "{{ log('Target: ' ~ target.name ~ ' | Schema: ' ~ target.schema, info=True) }}"
+
+on-run-end:
+  - "{{ log('Completed dbt run at ' ~ modules.datetime.datetime.now(), info=True) }}"
