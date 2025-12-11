@@ -93,7 +93,7 @@ jobs:
       - name: Install dbt and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install dbt-postgres dbt-expectations dbt-utils
+          pip install dbt-postgres
 
       - name: Create dbt profiles.yml
         run: |
@@ -125,7 +125,7 @@ jobs:
           CREATE SCHEMA IF NOT EXISTS seeds;
           EOF
 
-      - name: dbt deps
+      - name: dbt deps (installs dbt-utils, dbt-expectations)
         run: |
           cd dbt/spotify_dq
           dbt deps
@@ -176,7 +176,7 @@ jobs:
       - name: Install dbt and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install dbt-postgres dbt-expectations dbt-utils
+          pip install dbt-postgres
 
       - name: Create dbt profiles.yml
         run: |
