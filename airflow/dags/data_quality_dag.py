@@ -205,14 +205,71 @@ def check_sla_compliance(**context: Any) -> Dict[str, Any]:
         return {'sla_met': False, 'error': str(e)}
 
 
+def check_dbt_test_failures(**context: Any) -> Dict[str, Any]:
+    """Check for stored dbt test failures in staging_data_quality schema."""
+    hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+
+    failures = {}
+
+    # Check for NULL track_name failures
+    try:
+        result = hook.get_first("""
+            SELECT COUNT(*) FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name
+        """)
+        if result and result[0] > 0:
+            failures['null_track_name'] = result[0]
+    except Exception:
+        pass  # Table may not exist if no failures
+
+    # Check for NULL album_name failures
+    try:
+        result = hook.get_first("""
+            SELECT COUNT(*) FROM staging_data_quality.not_null_stg_spotify__tracks_album_name
+        """)
+        if result and result[0] > 0:
+            failures['null_album_name'] = result[0]
+    except Exception:
+        pass
+
+    # Check for any other failure tables
+    try:
+        result = hook.get_records("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'staging_data_quality'
+            AND table_name NOT LIKE '%_stg_%'
+        """)
+        for row in result or []:
+            table_name = row[0]
+            if table_name not in ['source_not_null_spotify_raw_tracks_track_name']:
+                count_result = hook.get_first(f"SELECT COUNT(*) FROM staging_data_quality.{table_name}")
+                if count_result and count_result[0] > 0:
+                    failures[table_name] = count_result[0]
+    except Exception:
+        pass
+
+    return failures
+
+
 def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
     """Send alerts for SLA violations or DQ issues."""
     ti = context['ti']
 
     sla_result = ti.xcom_pull(task_ids='check_sla_compliance')
     metrics_result = ti.xcom_pull(task_ids='collect_dq_metrics')
+    dbt_failures = check_dbt_test_failures(**context)
 
     alerts = []
+
+    # Check dbt test failures (stored in staging_data_quality)
+    if dbt_failures:
+        for test_name, count in dbt_failures.items():
+            if 'track_name' in test_name:
+                alerts.append(f"DBT TEST FAILURE: {count} records with NULL track_name")
+            elif 'album_name' in test_name:
+                alerts.append(f"DBT TEST WARNING: {count} records with NULL album_name")
+            else:
+                alerts.append(f"DBT TEST FAILURE: {test_name} ({count} records)")
 
     # Check SLA
     if sla_result and not sla_result.get('sla_met', True):
