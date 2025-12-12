@@ -220,7 +220,11 @@ def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
 
     # Check SLA
     if sla_result and not sla_result.get('sla_met', True):
-        alerts.append(f"SLA VIOLATION: Data is {sla_result.get('hours_since_load', 'unknown')} hours stale")
+        if 'error' in sla_result:
+            alerts.append(f"SLA CHECK FAILED: {sla_result.get('error')}")
+        else:
+            hours = sla_result.get('hours_since_load', 0)
+            alerts.append(f"SLA VIOLATION: Data is {hours:.1f} hours stale (SLA: {sla_result.get('sla_hours', 24)}h)")
 
     # Check metrics thresholds
     if metrics_result:
