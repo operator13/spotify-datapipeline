@@ -19,6 +19,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
 import os
 
 
@@ -36,6 +37,7 @@ default_args = {
 
 DBT_PROJECT_DIR = os.environ.get('DBT_PROFILES_DIR', '/opt/airflow/dbt')
 POSTGRES_CONN_ID = 'spotify_postgres'
+SLACK_CONN_ID = 'slack_dq_alerts'
 
 
 # =============================================================================
@@ -207,7 +209,7 @@ def check_sla_compliance(**context: Any) -> Dict[str, Any]:
         return {'sla_met': False, 'error': str(e)}
 
 
-def send_alert_if_needed(**context: Any) -> None:
+def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
     """Send alerts for SLA violations or DQ issues."""
     ti = context['ti']
 
@@ -228,15 +230,46 @@ def send_alert_if_needed(**context: Any) -> None:
                 if 'ratio' in metric and isinstance(value, (int, float)) and value < 0.90:
                     alerts.append(f"LOW {dim.upper()}: {metric} = {value:.2%}")
 
+    result = {
+        'has_alerts': len(alerts) > 0,
+        'alert_count': len(alerts),
+        'alerts': alerts
+    }
+
     if alerts:
         print("=" * 60)
         print("ALERTS TRIGGERED:")
         for alert in alerts:
             print(f"  - {alert}")
         print("=" * 60)
-        # In production, would send to Slack/PagerDuty/email here
     else:
         print("All checks passed - no alerts needed")
+
+    return result
+
+
+def build_slack_message(**context: Any) -> str:
+    """Build Slack message from alert results."""
+    ti = context['ti']
+    alert_result = ti.xcom_pull(task_ids='send_alerts')
+
+    if not alert_result or not alert_result.get('has_alerts'):
+        return ":white_check_mark: *Data Quality Check Passed*\nAll metrics within acceptable thresholds."
+
+    alerts = alert_result.get('alerts', [])
+    alert_list = "\n".join([f"• {alert}" for alert in alerts])
+
+    message = f"""
+:warning: *Data Quality Alert*
+
+*{len(alerts)} issue(s) detected:*
+{alert_list}
+
+*Pipeline:* spotify_etl
+*Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+*Dashboard:* <http://localhost:3000|View Grafana Dashboard>
+"""
+    return message
 
 
 # =============================================================================
@@ -287,11 +320,24 @@ with DAG(
         provide_context=True,
     )
 
+    slack_notification = SlackWebhookOperator(
+        task_id='slack_notification',
+        slack_webhook_conn_id=SLACK_CONN_ID,
+        message="{{ ti.xcom_pull(task_ids='build_slack_message') }}",
+        channel='#data-quality-alerts',
+    )
+
+    build_message = PythonOperator(
+        task_id='build_slack_message',
+        python_callable=build_slack_message,
+        provide_context=True,
+    )
+
     end = EmptyOperator(task_id='end')
 
     # =========================================================================
     # DAG Dependencies
     # =========================================================================
     start >> [collect_metrics, check_sla, run_dbt_tests]
-    [collect_metrics, check_sla] >> send_alerts
-    [run_dbt_tests, send_alerts] >> refresh_dq_summary >> end
+    [collect_metrics, check_sla] >> send_alerts >> build_message >> slack_notification
+    [run_dbt_tests, slack_notification] >> refresh_dq_summary >> end

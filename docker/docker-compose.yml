@@ -21,6 +21,8 @@ x-airflow-common: &airflow-common
     POSTGRES_USER: spotify
     POSTGRES_PASSWORD: spotify_password
     POSTGRES_DB: spotify_warehouse
+    # Slack webhook for DQ alerts (set in .env file)
+    SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
   volumes:
     - ../airflow/dags:/opt/airflow/dags
     - ../airflow/plugins:/opt/airflow/plugins
@@ -129,6 +131,14 @@ services:
           --lastname User \
           --role Admin \
           --email admin@example.com
+        # Create Slack webhook connection if SLACK_WEBHOOK_URL is set
+        if [ -n "$SLACK_WEBHOOK_URL" ]; then
+          airflow connections add slack_dq_alerts \
+            --conn-type slackwebhook \
+            --conn-host https://hooks.slack.com/services \
+            --conn-password "$SLACK_WEBHOOK_URL" \
+            || true
+        fi
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'

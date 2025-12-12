@@ -36,6 +36,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     sqlalchemy>=2.0.0 \
     psycopg2-binary>=2.9.0 \
     apache-airflow-providers-postgres>=5.0.0 \
+    apache-airflow-providers-slack>=8.0.0 \
     python-dotenv>=1.0.0 \
     pyyaml>=6.0.0
 
