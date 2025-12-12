@@ -227,8 +227,14 @@ def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
         dimensions = metrics_result.get('dimensions', {})
         for dim, values in dimensions.items():
             for metric, value in values.items():
-                if 'ratio' in metric and isinstance(value, (int, float)) and value < 0.90:
-                    alerts.append(f"LOW {dim.upper()}: {metric} = {value:.2%}")
+                if 'ratio' in metric and isinstance(value, (int, float)):
+                    # For duplicate_ratio, lower is better (fewer duplicates)
+                    if 'duplicate' in metric:
+                        if value > 0.10:  # Alert if more than 10% duplicates
+                            alerts.append(f"HIGH {dim.upper()}: {metric} = {value:.2%}")
+                    # For other ratios (completeness, accuracy), higher is better
+                    elif value < 0.90:
+                        alerts.append(f"LOW {dim.upper()}: {metric} = {value:.2%}")
 
     result = {
         'has_alerts': len(alerts) > 0,
