@@ -13,7 +13,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
     # Kaggle credentials (loaded from .env file)
-    KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN}
+    KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN:-}
     # dbt connection settings
     DBT_PROFILES_DIR: /opt/airflow/dbt
     POSTGRES_HOST: postgres
@@ -132,12 +132,10 @@ services:
           --role Admin \
           --email admin@example.com
         # Create Slack webhook connection if SLACK_WEBHOOK_URL is set
-        if [ -n "$SLACK_WEBHOOK_URL" ]; then
+        if [ -n "$$SLACK_WEBHOOK_URL" ]; then
           airflow connections add slack_dq_alerts \
             --conn-type slackwebhook \
-            --conn-schema https \
-            --conn-host hooks.slack.com \
-            --conn-path "/services/${SLACK_WEBHOOK_URL#*services/}" \
+            --conn-host "$$SLACK_WEBHOOK_URL" \
             || true
         fi
     environment:
