@@ -210,37 +210,36 @@ jobs:
           CREATE SCHEMA IF NOT EXISTS data_quality;
           CREATE SCHEMA IF NOT EXISTS seeds;
 
-          -- Create raw table for testing
+          -- Create raw table for testing (column names match source definition)
           CREATE TABLE IF NOT EXISTS raw.spotify_tracks_raw (
-            "Track Name" TEXT,
-            "Artists" TEXT,
-            "Album" TEXT,
-            "Genre" TEXT,
-            "Release Date" TEXT,
-            "Tempo" NUMERIC,
-            "Loudness" NUMERIC,
-            "Energy" NUMERIC,
-            "Danceability" NUMERIC,
-            "Instrumentalness" NUMERIC,
-            "Valence" NUMERIC,
-            "Popularity Score" NUMERIC,
-            "Streaming Counts" BIGINT,
-            "Country" TEXT,
-            "Label" TEXT,
-            "_loaded_at" TIMESTAMP DEFAULT NOW(),
-            "_source_file" TEXT
+            track_name TEXT,
+            artist_name TEXT,
+            album_name TEXT,
+            genre TEXT,
+            release_date TEXT,
+            tempo NUMERIC,
+            loudness NUMERIC,
+            energy NUMERIC,
+            danceability NUMERIC,
+            instrumentalness NUMERIC,
+            popularity NUMERIC,
+            stream_count BIGINT,
+            country TEXT,
+            label TEXT,
+            _loaded_at TIMESTAMP DEFAULT NOW(),
+            _source_file TEXT
           );
 
           -- Insert sample data for tests
           INSERT INTO raw.spotify_tracks_raw
-          ("Track Name", "Artists", "Album", "Genre", "Release Date",
-           "Tempo", "Loudness", "Energy", "Danceability", "Instrumentalness",
-           "Valence", "Popularity Score", "Streaming Counts", "Country", "Label")
+          (track_name, artist_name, album_name, genre, release_date,
+           tempo, loudness, energy, danceability, instrumentalness,
+           popularity, stream_count, country, label)
           VALUES
           ('Test Track 1', 'Artist A', 'Album X', 'Pop', '2023-01-15',
-           120.5, -5.2, 0.8, 0.75, 0.01, 0.65, 85, 1000000, 'US', 'Sony'),
+           120.5, -5.2, 0.8, 0.75, 0.01, 85, 1000000, 'US', 'Sony'),
           ('Test Track 2', 'Artist B', 'Album Y', 'Rock', '2022-06-20',
-           140.2, -6.8, 0.9, 0.60, 0.05, 0.55, 72, 500000, 'UK', 'Universal');
+           140.2, -6.8, 0.9, 0.60, 0.05, 72, 500000, 'UK', 'Universal');
           EOF
 
       - name: dbt deps
