@@ -209,7 +209,7 @@ def check_dbt_test_failures(**context: Any) -> Dict[str, Any]:
     """Check for stored dbt test failures in staging_data_quality schema."""
     hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
 
-    failures = {}
+    failures = []
 
     # Check for NULL track_name failures
     try:
@@ -217,9 +217,23 @@ def check_dbt_test_failures(**context: Any) -> Dict[str, Any]:
             SELECT COUNT(*) FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name
         """)
         if result and result[0] > 0:
-            failures['null_track_name'] = result[0]
+            # Get sample records for context
+            samples = hook.get_records("""
+                SELECT artist_name, album_name, genre, country
+                FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name
+                ORDER BY popularity DESC
+                LIMIT 3
+            """)
+            sample_str = ", ".join([f"{s[0]}" for s in samples]) if samples else ""
+            failures.append({
+                'test': 'NULL track_name',
+                'severity': 'ERROR',
+                'count': result[0],
+                'table': 'staging_data_quality.source_not_null_spotify_raw_tracks_track_name',
+                'sample_artists': sample_str
+            })
     except Exception:
-        pass  # Table may not exist if no failures
+        pass
 
     # Check for NULL album_name failures
     try:
@@ -227,24 +241,20 @@ def check_dbt_test_failures(**context: Any) -> Dict[str, Any]:
             SELECT COUNT(*) FROM staging_data_quality.not_null_stg_spotify__tracks_album_name
         """)
         if result and result[0] > 0:
-            failures['null_album_name'] = result[0]
-    except Exception:
-        pass
-
-    # Check for any other failure tables
-    try:
-        result = hook.get_records("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'staging_data_quality'
-            AND table_name NOT LIKE '%_stg_%'
-        """)
-        for row in result or []:
-            table_name = row[0]
-            if table_name not in ['source_not_null_spotify_raw_tracks_track_name']:
-                count_result = hook.get_first(f"SELECT COUNT(*) FROM staging_data_quality.{table_name}")
-                if count_result and count_result[0] > 0:
-                    failures[table_name] = count_result[0]
+            samples = hook.get_records("""
+                SELECT track_name, artist_names_raw, genre
+                FROM staging_data_quality.not_null_stg_spotify__tracks_album_name
+                ORDER BY popularity_score DESC
+                LIMIT 3
+            """)
+            sample_str = ", ".join([f"{s[0][:20]}..." if len(str(s[0])) > 20 else str(s[0]) for s in samples]) if samples else ""
+            failures.append({
+                'test': 'NULL album_name',
+                'severity': 'WARN',
+                'count': result[0],
+                'table': 'staging_data_quality.not_null_stg_spotify__tracks_album_name',
+                'sample_tracks': sample_str
+            })
     except Exception:
         pass
 
@@ -263,13 +273,20 @@ def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
 
     # Check dbt test failures (stored in staging_data_quality)
     if dbt_failures:
-        for test_name, count in dbt_failures.items():
-            if 'track_name' in test_name:
-                alerts.append(f"DBT TEST FAILURE: {count} records with NULL track_name")
-            elif 'album_name' in test_name:
-                alerts.append(f"DBT TEST WARNING: {count} records with NULL album_name")
-            else:
-                alerts.append(f"DBT TEST FAILURE: {test_name} ({count} records)")
+        for failure in dbt_failures:
+            severity = failure.get('severity', 'ERROR')
+            test = failure.get('test', 'Unknown')
+            count = failure.get('count', 0)
+            table = failure.get('table', '')
+
+            alert_msg = f"[{severity}] {test}: {count} records"
+            if failure.get('sample_artists'):
+                alert_msg += f"\n     → Sample artists: {failure['sample_artists']}"
+            if failure.get('sample_tracks'):
+                alert_msg += f"\n     → Sample tracks: {failure['sample_tracks']}"
+            alert_msg += f"\n     → Query: SELECT * FROM {table}"
+
+            alerts.append(alert_msg)
 
     # Check SLA
     if sla_result and not sla_result.get('sla_met', True):
