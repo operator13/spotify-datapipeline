@@ -177,19 +177,15 @@ def check_sla_compliance(**context: Any) -> Dict[str, Any]:
         # Log SLA status
         insert_query = """
         INSERT INTO data_quality.sla_monitoring
-        (pipeline_name, expected_completion_time, actual_completion_time, sla_met, deviation_minutes, dag_run_id)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        (pipeline_name, expected_completion, actual_completion, sla_met)
+        VALUES (%s, %s, %s, %s)
         """
-
-        deviation = int((hours_since_load - sla_hours) * 60) if not sla_met else 0
 
         hook.run(insert_query, parameters=(
             'spotify_etl',
-            '06:00:00',
+            datetime.now(),
             latest_load,
-            sla_met,
-            deviation,
-            context['run_id']
+            sla_met
         ))
 
         result_dict = {
