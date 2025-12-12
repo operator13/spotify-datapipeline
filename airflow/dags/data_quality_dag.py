@@ -62,7 +62,7 @@ def collect_dq_metrics(**context: Any) -> Dict[str, Any]:
         COUNT(genre) as genre_count,
         COUNT(country) as country_count,
         COUNT(artists) as artists_count
-    FROM marts.fct_tracks
+    FROM staging_marts.fct_tracks
     """
 
     try:
@@ -84,7 +84,7 @@ def collect_dq_metrics(**context: Any) -> Dict[str, Any]:
     SELECT
         COUNT(*) as total,
         COUNT(DISTINCT track_id) as unique_tracks
-    FROM marts.fct_tracks
+    FROM staging_marts.fct_tracks
     """
 
     try:
@@ -107,7 +107,7 @@ def collect_dq_metrics(**context: Any) -> Dict[str, Any]:
         COUNT(CASE WHEN popularity_score BETWEEN 0 AND 100 THEN 1 END) as valid_popularity,
         COUNT(CASE WHEN danceability BETWEEN 0 AND 1 THEN 1 END) as valid_danceability,
         COUNT(CASE WHEN energy BETWEEN 0 AND 1 THEN 1 END) as valid_energy
-    FROM marts.fct_tracks
+    FROM staging_marts.fct_tracks
     """
 
     try:
@@ -161,7 +161,7 @@ def check_sla_compliance(**context: Any) -> Dict[str, Any]:
     SELECT
         MAX(dbt_loaded_at) as latest_load,
         EXTRACT(EPOCH FROM (NOW() - MAX(dbt_loaded_at))) / 3600 as hours_since_load
-    FROM marts.fct_tracks
+    FROM staging_marts.fct_tracks
     """
 
     try:
