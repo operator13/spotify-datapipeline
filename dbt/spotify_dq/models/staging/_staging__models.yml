@@ -69,9 +69,7 @@ models:
 
       - name: album_name
         description: "Album name (trimmed)"
-        tests:
-          - not_null:
-              severity: warn
+        # Note: NULL check handled at source level in _staging.yml
 
       - name: genre
         description: "Music genre classification"

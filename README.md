@@ -649,6 +649,73 @@ Dashboard: View Grafana Dashboard
 | Duplicate ratio | > 10% | Too many duplicate records |
 | SLA compliance | > 24 hours | Data is stale |
 
+### How DQ Failures Are Stored
+
+When dbt tests fail, the failing records are stored in PostgreSQL for investigation:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         DQ FAILURE DETECTION FLOW                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    dbt test --store-failures
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    staging_data_quality schema                          │
+    │  ┌─────────────────────────────────────────────────────────────────┐    │
+    │  │  Tables created automatically for each failing test:            │    │
+    │  │                                                                 │    │
+    │  │  • source_not_null_spotify_raw_tracks_track_name (21 rows)      │    │
+    │  │  • dbt_expectations_source_expect_27d2bc79e... (46 rows)        │    │
+    │  │  • [any new failing test creates a new table]                   │    │
+    │  └─────────────────────────────────────────────────────────────────┘    │
+    └─────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  data_quality.get_dbt_test_failures() function                          │
+    │  Dynamically discovers ALL failure tables with row counts               │
+    └─────────────────────────────────────────────────────────────────────────┘
+              │
+              ├──────────────────────┬──────────────────────┐
+              ▼                      ▼                      ▼
+    ┌──────────────────┐   ┌─────────────────-─┐   ┌──────────────────┐
+    │  Slack Alerts    │   │ Grafana Dashboard │   │  Direct Query    │
+    │  (Automated)     │   │ (Real-time)       │   │  (Ad-hoc)        │
+    └──────────────────┘   └────────────────-──┘   └──────────────────┘
+```
+
+**Database Schemas:**
+
+| Schema | Purpose |
+|--------|---------|
+| `raw` | Raw source data loaded from Kaggle |
+| `staging_marts` | dbt models (staging, intermediate, marts) |
+| `data_quality` | Custom DQ metrics and monitoring tables |
+| `staging_data_quality` | dbt test failure records (auto-created) |
+
+**Querying Failed Records:**
+
+```sql
+-- View all current test failures
+SELECT * FROM data_quality.get_dbt_test_failures();
+
+-- Inspect specific failing records (example: NULL track names)
+SELECT * FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name;
+
+-- List all failure tables
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'staging_data_quality';
+```
+
+**Key Points:**
+- Failure tables persist until manually dropped or tests pass
+- New failures automatically create new tables
+- Both Slack and Grafana use the same dynamic detection function
+- Useful for root cause analysis of data quality issues
+
 ---
 
 ## CI/CD Pipeline
