@@ -133,9 +133,10 @@ services:
           --email admin@example.com
         # Create Slack webhook connection if SLACK_WEBHOOK_URL is set
         if [ -n "$$SLACK_WEBHOOK_URL" ]; then
+          WEBHOOK_TOKEN=$$(echo "$$SLACK_WEBHOOK_URL" | sed 's|.*services/||')
           airflow connections add slack_dq_alerts \
             --conn-type slackwebhook \
-            --conn-host "$$SLACK_WEBHOOK_URL" \
+            --conn-password "$$WEBHOOK_TOKEN" \
             || true
         fi
     environment:
