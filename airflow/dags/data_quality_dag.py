@@ -266,7 +266,7 @@ def build_slack_message(**context: Any) -> str:
 
 *Pipeline:* spotify_etl
 *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-*Dashboard:* <http://localhost:3000|View Grafana Dashboard>
+*Dashboard:* <http://localhost:3000/d/spotify-dq-overview/spotify-data-quality-dashboard?orgId=1&refresh=5m|View Grafana Dashboard>
 """
 
     alerts = alert_result.get('alerts', [])
@@ -279,7 +279,7 @@ def build_slack_message(**context: Any) -> str:
 
 *Pipeline:* spotify_etl
 *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-*Dashboard:* <http://localhost:3000|View Grafana Dashboard>
+*Dashboard:* <http://localhost:3000/d/spotify-dq-overview/spotify-data-quality-dashboard?orgId=1&refresh=5m|View Grafana Dashboard>
 """
     return message
 
