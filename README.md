@@ -14,6 +14,7 @@ A **production-ready data pipeline** demonstrating enterprise-grade data quality
 - **6 Data Quality Dimensions** with real-time monitoring and alerting
 - **85,000+ tracks** processed through a complete ELT pipeline
 - **Real-time Grafana dashboards** for DQ observability
+- **Slack notifications** for instant DQ alerts
 - **Fully containerized** with Docker Compose for easy deployment
 
 ---
@@ -98,6 +99,7 @@ A **production-ready data pipeline** demonstrating enterprise-grade data quality
 | **Testing** | dbt-expectations, dbt-utils | 141 automated data quality tests |
 | **Database** | PostgreSQL 15 | Data warehouse with dimensional model |
 | **Observability** | Grafana 10.2+ | Real-time DQ dashboards, alerting |
+| **Alerting** | Slack Webhooks | Instant DQ failure notifications |
 | **Infrastructure** | Docker Compose | Containerized deployment |
 | **CI/CD** | GitHub Actions | Automated testing, deployment |
 
@@ -575,6 +577,77 @@ make download-data   # Download Kaggle dataset
 | **Uniqueness** | Duplicate ratio | =100% | No duplicate records |
 | **All DQ Metrics** | 13 individual metrics | Various | Detailed breakdown |
 | **Table Row Counts** | Row counts | - | Data volume monitoring |
+
+---
+
+## Slack Notifications
+
+Real-time Slack alerts notify your team immediately when data quality issues are detected.
+
+### Alert Types
+
+| Status | Message | Description |
+|--------|---------|-------------|
+| :white_check_mark: **Passed** | "Data Quality Check Passed" | All metrics within acceptable thresholds |
+| :warning: **Alert** | "Data Quality Alert" | Issues detected requiring attention |
+
+### Sample Alerts
+
+**When all checks pass:**
+```
+✅ Data Quality Check Passed 🎉
+
+✨ All metrics within acceptable thresholds.
+
+Pipeline: spotify_etl
+Time: 2025-12-12 03:45:00 UTC
+Dashboard: View Grafana Dashboard
+```
+
+**When issues are detected:**
+```
+🚨 Data Quality Alert ⚠️
+
+❌ 2 issue(s) detected:
+• SLA VIOLATION: Data is 52.3 hours stale (SLA: 24h)
+• LOW COMPLETENESS: genre_ratio = 85.00%
+
+Pipeline: spotify_etl
+Time: 2025-12-12 03:45:00 UTC
+Dashboard: View Grafana Dashboard
+```
+
+### Setup Slack Integration
+
+1. **Create Slack Incoming Webhook**
+   - Go to https://api.slack.com/messaging/webhooks
+   - Create a new app → Enable Incoming Webhooks
+   - Add webhook to your desired channel (e.g., `#data-quality-alerts`)
+   - Copy the webhook URL
+
+2. **Configure Environment Variable**
+   ```bash
+   # Add to your .env file
+   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../xxx
+   ```
+
+3. **Rebuild Docker (first time only)**
+   ```bash
+   cd docker && docker compose down && docker compose up --build -d
+   ```
+
+4. **Trigger Alerts**
+   - Alerts are sent automatically by the `data_quality_monitoring` DAG (runs every 4 hours)
+   - Manually trigger: Airflow UI → `data_quality_monitoring` → Trigger DAG
+
+### Alert Conditions
+
+| Metric Type | Threshold | Alert Triggered When |
+|-------------|-----------|---------------------|
+| Completeness ratios | < 90% | Critical fields have too many nulls |
+| Accuracy ratios | < 90% | Values outside expected ranges |
+| Duplicate ratio | > 10% | Too many duplicate records |
+| SLA compliance | > 24 hours | Data is stale |
 
 ---
 
