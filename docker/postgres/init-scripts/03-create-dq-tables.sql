@@ -117,10 +117,68 @@ CREATE INDEX idx_anomalies_detected ON data_quality.data_anomalies(detected_at);
 COMMENT ON TABLE data_quality.data_anomalies IS 'Tracks detected data anomalies for investigation and resolution';
 
 -- =============================================================================
+-- Function to get dbt test failures dynamically
+-- Returns all tables in staging_data_quality with row counts
+-- =============================================================================
+CREATE OR REPLACE FUNCTION data_quality.get_dbt_test_failures()
+RETURNS TABLE (
+    test_table TEXT,
+    test_type TEXT,
+    severity TEXT,
+    failed_records BIGINT
+) AS $$
+DECLARE
+    tbl RECORD;
+    cnt BIGINT;
+BEGIN
+    FOR tbl IN
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'staging_data_quality'
+    LOOP
+        EXECUTE format('SELECT COUNT(*) FROM staging_data_quality.%I', tbl.table_name) INTO cnt;
+
+        IF cnt > 0 THEN
+            test_table := tbl.table_name;
+
+            -- Determine test type
+            IF tbl.table_name LIKE '%not_null%' THEN
+                test_type := 'NULL Check';
+            ELSIF tbl.table_name LIKE '%unique%' THEN
+                test_type := 'Uniqueness';
+            ELSIF tbl.table_name LIKE '%accepted_values%' THEN
+                test_type := 'Valid Values';
+            ELSIF tbl.table_name LIKE '%relationship%' THEN
+                test_type := 'FK Reference';
+            ELSIF tbl.table_name LIKE '%expect%' THEN
+                test_type := 'Expectation';
+            ELSE
+                test_type := 'Other';
+            END IF;
+
+            -- Determine severity (source tests = ERROR, staging tests = WARN)
+            IF tbl.table_name LIKE 'source_%' THEN
+                severity := 'ERROR';
+            ELSE
+                severity := 'WARN';
+            END IF;
+
+            failed_records := cnt;
+
+            RETURN NEXT;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION data_quality.get_dbt_test_failures() IS 'Dynamically returns all dbt test failure tables with row counts';
+
+-- =============================================================================
 -- Grant permissions to spotify user
 -- =============================================================================
 GRANT ALL ON ALL TABLES IN SCHEMA data_quality TO spotify;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA data_quality TO spotify;
+GRANT EXECUTE ON FUNCTION data_quality.get_dbt_test_failures() TO spotify;
 
 -- Log completion
 DO $$

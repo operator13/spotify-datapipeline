@@ -591,7 +591,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT 'source_not_null_spotify_raw_tracks_track_name' as test_table, 'NULL Check' as test_type, 'ERROR' as severity, COUNT(*)::int as failed_records FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name UNION ALL SELECT 'not_null_stg_spotify__tracks_album_name', 'NULL Check', 'WARN', COUNT(*)::int FROM staging_data_quality.not_null_stg_spotify__tracks_album_name ORDER BY severity, failed_records DESC",
+          "rawSql": "SELECT * FROM data_quality.get_dbt_test_failures() ORDER BY severity, failed_records DESC",
           "refId": "A"
         }
       ],
