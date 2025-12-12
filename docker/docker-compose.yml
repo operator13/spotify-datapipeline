@@ -135,8 +135,9 @@ services:
         if [ -n "$SLACK_WEBHOOK_URL" ]; then
           airflow connections add slack_dq_alerts \
             --conn-type slackwebhook \
-            --conn-host https://hooks.slack.com/services \
-            --conn-password "$SLACK_WEBHOOK_URL" \
+            --conn-schema https \
+            --conn-host hooks.slack.com \
+            --conn-path "/services/${SLACK_WEBHOOK_URL#*services/}" \
             || true
         fi
     environment:
