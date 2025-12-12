@@ -260,15 +260,21 @@ def build_slack_message(**context: Any) -> str:
     alert_result = ti.xcom_pull(task_ids='send_alerts')
 
     if not alert_result or not alert_result.get('has_alerts'):
-        return ":white_check_mark: *Data Quality Check Passed*\nAll metrics within acceptable thresholds."
+        return f""":white_check_mark: *Data Quality Check Passed* :tada:
+
+:sparkles: All metrics within acceptable thresholds.
+
+*Pipeline:* spotify_etl
+*Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+*Dashboard:* <http://localhost:3000|View Grafana Dashboard>
+"""
 
     alerts = alert_result.get('alerts', [])
     alert_list = "\n".join([f"• {alert}" for alert in alerts])
 
-    message = f"""
-:warning: *Data Quality Alert*
+    message = f""":rotating_light: *Data Quality Alert* :warning:
 
-*{len(alerts)} issue(s) detected:*
+:x: *{len(alerts)} issue(s) detected:*
 {alert_list}
 
 *Pipeline:* spotify_etl
