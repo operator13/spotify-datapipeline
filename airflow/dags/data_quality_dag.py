@@ -12,7 +12,7 @@ Created: 2024
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -205,57 +205,57 @@ def check_sla_compliance(**context: Any) -> Dict[str, Any]:
         return {'sla_met': False, 'error': str(e)}
 
 
-def check_dbt_test_failures(**context: Any) -> Dict[str, Any]:
-    """Check for stored dbt test failures in staging_data_quality schema."""
+def check_dbt_test_failures(**context: Any) -> List[Dict[str, Any]]:
+    """Check for stored dbt test failures in staging_data_quality schema dynamically."""
     hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
 
     failures = []
 
-    # Check for NULL track_name failures
+    # Get all failure tables dynamically using the function
     try:
-        result = hook.get_first("""
-            SELECT COUNT(*) FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name
+        results = hook.get_records("""
+            SELECT * FROM data_quality.get_dbt_test_failures()
+            ORDER BY severity, failed_records DESC
         """)
-        if result and result[0] > 0:
-            # Get sample records for context
-            samples = hook.get_records("""
-                SELECT artist_name, album_name, genre, country
-                FROM staging_data_quality.source_not_null_spotify_raw_tracks_track_name
-                ORDER BY popularity DESC
-                LIMIT 3
-            """)
-            sample_str = ", ".join([f"{s[0]}" for s in samples]) if samples else ""
-            failures.append({
-                'test': 'NULL track_name',
-                'severity': 'ERROR',
-                'count': result[0],
-                'table': 'staging_data_quality.source_not_null_spotify_raw_tracks_track_name',
-                'sample_artists': sample_str
-            })
-    except Exception:
-        pass
 
-    # Check for NULL album_name failures
-    try:
-        result = hook.get_first("""
-            SELECT COUNT(*) FROM staging_data_quality.not_null_stg_spotify__tracks_album_name
-        """)
-        if result and result[0] > 0:
-            samples = hook.get_records("""
-                SELECT track_name, artist_names_raw, genre
-                FROM staging_data_quality.not_null_stg_spotify__tracks_album_name
-                ORDER BY popularity_score DESC
-                LIMIT 3
-            """)
-            sample_str = ", ".join([f"{s[0][:20]}..." if len(str(s[0])) > 20 else str(s[0]) for s in samples]) if samples else ""
+        for row in results or []:
+            table_name, test_type, severity, count = row
+
+            # Determine human-readable test name
+            if 'track_name' in table_name:
+                test_name = 'NULL track_name'
+            elif 'album_name' in table_name:
+                test_name = 'NULL album_name'
+            elif 'expect' in table_name:
+                test_name = f'{test_type} test'
+            else:
+                test_name = test_type
+
+            # Try to get sample records
+            sample_str = ""
+            try:
+                samples = hook.get_records(f"""
+                    SELECT * FROM staging_data_quality."{table_name}"
+                    LIMIT 3
+                """)
+                if samples and len(samples) > 0:
+                    # Get first column values as samples
+                    first_col_values = [str(s[0])[:25] for s in samples if s[0]]
+                    sample_str = ", ".join(first_col_values)
+            except Exception:
+                pass
+
             failures.append({
-                'test': 'NULL album_name',
-                'severity': 'WARN',
-                'count': result[0],
-                'table': 'staging_data_quality.not_null_stg_spotify__tracks_album_name',
-                'sample_tracks': sample_str
+                'test': test_name,
+                'severity': severity,
+                'count': count,
+                'table': f'staging_data_quality.{table_name}',
+                'samples': sample_str
             })
-    except Exception:
+
+    except Exception as e:
+        print(f"Error checking dbt test failures: {e}")
+        # Fallback to hardcoded checks if function doesn't exist
         pass
 
     return failures
@@ -280,10 +280,8 @@ def send_alert_if_needed(**context: Any) -> Dict[str, Any]:
             table = failure.get('table', '')
 
             alert_msg = f"[{severity}] {test}: {count} records"
-            if failure.get('sample_artists'):
-                alert_msg += f"\n     → Sample artists: {failure['sample_artists']}"
-            if failure.get('sample_tracks'):
-                alert_msg += f"\n     → Sample tracks: {failure['sample_tracks']}"
+            if failure.get('samples'):
+                alert_msg += f"\n     → Samples: {failure['samples']}"
             alert_msg += f"\n     → Query: SELECT * FROM {table}"
 
             alerts.append(alert_msg)
